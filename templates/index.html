@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片合成工具</title>
+    <style>
+        /* 模态框样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+        }
+        .modal-content {
+            margin: auto;
+            display: block;
+            max-width: 90%;
+            max-height: 90vh;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .upload-area:hover {
+            border-color: #666;
+        }
+        #fileInput {
+            display: none;
+        }
+        .preview-area {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .preview-item {
+            position: relative;
+            aspect-ratio: 1;
+        }
+        .preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+        .preview-item .remove-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: red;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+        .button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        .button:hover {
+            background-color: #45a049;
+        }
+        .button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #message {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        .success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+    </style>
+</head>
+<body>
+    <!-- 模态框 -->
+    <div id="imageModal" class="modal">
+        <span class="modal-close">&times;</span>
+        <img class="modal-content" id="modalImage">
+    </div>
+
+    <div class="container">
+        <h1>图片合成工具</h1>
+        <div class="upload-area" id="dropArea">
+            <p>点击或拖拽上传5-9张图片</p>
+            <input type="file" id="fileInput" multiple accept=".jpg,.jpeg,.png">
+        </div>
+        <div class="preview-area" id="previewArea"></div>
+        <div id="message"></div>
+        <div style="display: flex; gap: 10px;">
+            <button id="normalProcessBtn" class="button" disabled>正常处理</button>
+            <button id="invertProcessBtn" class="button" disabled>反相处理</button>
+        </div>
+    </div>
+
+    <script>
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('fileInput');
+        const previewArea = document.getElementById('previewArea');
+        const normalProcessBtn = document.getElementById('normalProcessBtn');
+        const invertProcessBtn = document.getElementById('invertProcessBtn');
+        const messageDiv = document.getElementById('message');
+        let files = [];
+
+        // 处理拖拽
+        dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropArea.style.borderColor = '#666';
+        });
+
+        dropArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropArea.style.borderColor = '#ccc';
+        });
+
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropArea.style.borderColor = '#ccc';
+            handleFiles(e.dataTransfer.files);
+        });
+
+        // 点击上传
+        dropArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        function handleFiles(newFiles) {
+            const imageFiles = Array.from(newFiles).filter(file => 
+                file.type.startsWith('image/'));
+            
+            files = [...files, ...imageFiles];
+            updatePreview();
+            updateMessage();
+        }
+
+        // function updatePreview() {
+        //     previewArea.innerHTML = '';
+        //     files.forEach((file, index) => {
+        //         const reader = new FileReader();
+        //         reader.onload = (e) => {
+        //             const div = document.createElement('div');
+        //             div.className = 'preview-item';
+        //             div.innerHTML = `
+        //                 <img src="${e.target.result}" alt="Preview" onclick="showModal('${e.target.result}')">
+        //                 <button class="remove-btn" onclick="removeFile(${index})">×</button>
+        //             `;
+        //             previewArea.appendChild(div);
+        //         };
+        //         reader.readAsDataURL(file);
+        //     });
+
+        //     const shouldEnableButtons = !(files.length < 5 || files.length > 9);
+        //     normalProcessBtn.disabled = !shouldEnableButtons;
+        //     invertProcessBtn.disabled = !shouldEnableButtons;
+        // }
+
+        function updatePreview() {
+            previewArea.innerHTML = '';
+            files.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const div = document.createElement('div');
+                    div.className = 'preview-item';
+                    div.innerHTML = `
+                        <img src="${e.target.result}" alt="Preview" data-index="${index}">
+                        <button class="remove-btn" data-index="${index}">×</button>
+                    `;
+                    previewArea.appendChild(div);
+                    
+                    // 添加点击事件监听器
+                    div.querySelector('img').addEventListener('click', () => {
+                        showModal(e.target.result);
+                    });
+                    
+                    // 添加删除按钮事件监听器
+                    div.querySelector('.remove-btn').addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        removeFile(index);
+                    });
+                };
+                reader.readAsDataURL(file);
+            });
+
+            const shouldEnableButtons = !(files.length < 5 || files.length > 9);
+            normalProcessBtn.disabled = !shouldEnableButtons;
+            invertProcessBtn.disabled = !shouldEnableButtons;
+        }
+
+        function removeFile(index) {
+            files.splice(index, 1);
+            updatePreview();
+            updateMessage();
+        }
+
+        function updateMessage() {
+            const count = files.length;
+            if (count === 0) {
+                messageDiv.textContent = '';
+                messageDiv.className = '';
+            } else if (count < 5) {
+                messageDiv.textContent = `还需要上传${5 - count}张图片`;
+                messageDiv.className = 'error';
+            } else if (count > 9) {
+                messageDiv.textContent = `超出限制，请删除${count - 9}张图片`;
+                messageDiv.className = 'error';
+            } else {
+                messageDiv.textContent = `已选择${count}张图片`;
+                messageDiv.className = 'success';
+            }
+        }
+
+        async function processImages(isInvert) {
+            if (files.length < 5 || files.length > 9) return;
+
+            const formData = new FormData();
+            formData.append('mode', isInvert ? 'invert' : 'normal');
+            files.forEach(file => {
+                formData.append('files[]', file);
+            });
+
+            normalProcessBtn.disabled = true;
+            invertProcessBtn.disabled = true;
+            const activeBtn = isInvert ? invertProcessBtn : normalProcessBtn;
+            activeBtn.textContent = '处理中...';
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    // 创建预览图片
+                    const resultPreview = document.createElement('div');
+                    resultPreview.style.marginTop = '20px';
+                    resultPreview.style.textAlign = 'center';
+                    resultPreview.innerHTML = `
+                        <h3>处理结果预览</h3>
+                        <img src="${url}" style="max-width: 100%; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: center; gap: 10px;">
+                            <button class="button" onclick="downloadResult('${url}')">下载结果</button>
+                            <button class="button" onclick="invertImage('${url}')">反相图片</button>
+                        </div>
+                    `;
+                    previewArea.innerHTML = '';
+                    previewArea.appendChild(resultPreview);
+                    messageDiv.textContent = '处理完成，可以预览并下载';
+                    messageDiv.className = 'success';
+
+                    // 添加下载函数
+                    window.downloadResult = function(url) {
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'result.png';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    };
+                } else {
+                    const data = await response.json();
+                    messageDiv.textContent = data.error || '处理失败';
+                    messageDiv.className = 'error';
+                }
+            } catch (error) {
+                messageDiv.textContent = '处理失败，请重试';
+                messageDiv.className = 'error';
+            }
+
+            normalProcessBtn.disabled = false;
+            invertProcessBtn.disabled = false;
+            normalProcessBtn.textContent = '正常处理';
+            invertProcessBtn.textContent = '反相处理';
+        }
+
+        normalProcessBtn.addEventListener('click', () => processImages(false));
+        invertProcessBtn.addEventListener('click', () => processImages(true));
+
+        // 反相图片处理函数
+        async function invertImage(url) {
+            try {
+                // 从Blob URL获取图片数据并转换为Base64
+                const imgResponse = await fetch(url);
+                if (!imgResponse.ok) {
+                    throw new Error('无法获取图片数据');
+                }
+                const blob = await imgResponse.blob();
+                const reader = new FileReader();
+                const base64Data = await new Promise((resolve, reject) => {
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = () => reject(new Error('读取图片数据失败'));
+                    reader.readAsDataURL(blob);
+                });
+
+                const response = await fetch('/invert', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ image_data: base64Data })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || '反相处理失败');
+                }
+
+                const resultBlob = await response.blob();
+                const newUrl = window.URL.createObjectURL(resultBlob);
+                
+                // 更新预览图片和下载按钮
+                const previewImg = document.querySelector('#previewArea img');
+                const downloadBtn = document.querySelector('#previewArea button');
+                if (!previewImg || !downloadBtn) {
+                    throw new Error('无法找到预览元素');
+                }
+                
+                previewImg.src = newUrl;
+                downloadBtn.onclick = () => downloadResult(newUrl);
+                
+                messageDiv.textContent = '反相处理成功';
+                messageDiv.className = 'success';
+            //     const base64Data = await new Promise((resolve) => {
+            //         reader.onloadend = () => resolve(reader.result);
+            //         reader.readAsDataURL(blob);
+            //     });
+
+            //     const response = await fetch('/invert', {
+            //         method: 'POST',
+            //         headers: {
+            //             'Content-Type': 'application/json'
+            //         },
+            //         body: JSON.stringify({ image_data: base64Data })
+            //     });
+
+            //     if (response.ok) {
+            //         const blob = await response.blob();
+            //         const newUrl = window.URL.createObjectURL(blob);
+            //         // 更新预览图片和下载按钮
+            //         const previewImg = document.querySelector('#previewArea img');
+            //         const downloadBtn = document.querySelector('#previewArea button');
+            //         previewImg.src = newUrl;
+            //         downloadBtn.onclick = () => downloadResult(newUrl);
+            //     } else {
+            //         messageDiv.textContent = '反相处理失败';
+            //         messageDiv.className = 'error';
+            //     }
+            } catch (error) {
+                messageDiv.textContent = '反相处理失败，请重试';
+                messageDiv.className = 'error';
+            }
+        }
+
+          // 将showModal函数改为直接定义
+          function showModal(imgSrc) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            modal.style.display = "block";
+            modalImg.src = imgSrc;
+
+            // 点击关闭按钮关闭模态框
+            const closeBtn = document.querySelector('.modal-close');
+            closeBtn.onclick = function() {
+                modal.style.display = "none";
+            }
+
+            // 点击模态框背景关闭
+            modal.onclick = function(e) {
+                if (e.target === modal) {
+                    modal.style.display = "none";
+                }
+            }
+        }
+
+        // // 图片预览模态框功能
+        // function showModal(imgSrc) {
+        //     const modal = document.getElementById('imageModal');
+        //     const modalImg = document.getElementById('modalImage');
+        //     modal.style.display = "block";
+        //     modalImg.src = imgSrc;
+
+        //     // 点击关闭按钮关闭模态框
+        //     const closeBtn = document.getElementsByClassName('modal-close')[0];
+        //     closeBtn.onclick = function() {
+        //         modal.style.display = "none";
+        //     }
+
+        //     // 点击模态框背景关闭
+        //     modal.onclick = function(e) {
+        //         if (e.target === modal) {
+        //             modal.style.display = "none";
+        //         }
+        //     }
+        // }
+    </script>
+</body>
+</html>
